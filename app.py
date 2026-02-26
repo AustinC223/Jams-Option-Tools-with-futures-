@@ -254,10 +254,9 @@ def prob_touch_barrier(S0, B, T, r, q, sigma, barrier_type: str):
 # DATA (Yahoo)
 # =========================
 @st.cache_data(ttl=300, show_spinner=False)
-@st.cache_data(ttl=300, show_spinner=False)
 def fetch_spot(ticker: str):
     try:
-        t = yf.Ticker(ticker) # 不需要傳入 session
+        t = yf.Ticker(ticker) 
         hist = t.history(period="2y", interval="1d")
         if hist is None or hist.empty:
             return None, None, None
@@ -494,6 +493,7 @@ spot, spot_ts, hist = fetch_spot(ticker)
 if spot is None or hist is None:
     st.error("❌ 無法從 Yahoo Finance 獲取數據。")
     st.info("這通常是雲端 IP 被暫時限制，或者是 Ticker 輸入錯誤。請稍候 1 分鐘再刷新。")
+    st.stop()
 hv21 = realized_vol(hist, 21)
 hv63 = realized_vol(hist, 63)
 
