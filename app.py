@@ -468,7 +468,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("## Futures Microstructure")
 near_fut = st.sidebar.text_input("Near-Month Futures", value="MESM5=F").upper().strip()
 far_fut  = st.sidebar.text_input("Far-Month Futures", value="MESU5=F").upper().strip()
-spot_idx = st.sidebar.text_input("Underlying Spot", value="SPY").upper().strip()
+spot_idx = st.sidebar.text_input("Underlying Spot", value="^GSPC").upper().strip()
 
 if "last_fetch" not in st.session_state:
     st.session_state.last_fetch = 0.0
