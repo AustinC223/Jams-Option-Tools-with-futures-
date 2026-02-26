@@ -478,7 +478,7 @@ def get_es_contract_tickers() -> tuple[str, str]:
             roll_date = first_friday + timedelta(weeks=2)
             if roll_date > today:
                 code = month_code[m]
-                yy = str(year)[-2:]
+                yy = str(year)[2:] 
                 candidates.append(f"ES{code}{yy}=F")
         if len(candidates) >= 2:
             break
@@ -718,20 +718,19 @@ with tabs[6]:
     # --- Real-time quote via CNBC Markets API (no key required) ---
     @st.cache_data(ttl=30, show_spinner=False)
     def fetch_realtime_quote(symbol: str) -> dict | None:
-        url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbol}"
         try:
-            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
-            r.raise_for_status()
-            result = r.json()["quoteResponse"]["result"]
-            if not result:
-                return None
-            q = result[0]
+            t = yf.Ticker(symbol)
+            info = t.fast_info
+            price = float(info.last_price or 0)
+            prev  = float(info.previous_close or price)
+            change = price - prev
+            change_pct = (change / prev * 100) if prev else 0
             return {
-                "price":      float(q.get("regularMarketPrice", 0)),
-                "change":     float(q.get("regularMarketChange", 0)),
-                "change_pct": float(q.get("regularMarketChangePercent", 0)),
-                "last_update": q.get("regularMarketTime", "N/A"),
-                "name":       q.get("shortName", symbol),
+                "price":      price,
+                "change":     change,
+                "change_pct": change_pct,
+                "last_update": "via yfinance",
+                "name":       symbol,
             }
         except Exception:
             return None
@@ -780,7 +779,7 @@ with tabs[6]:
                 help=f"Last update: {qt['last_update']} | Source: CNBC Markets API",
             )
         else:
-            col.warning(f"⚠️ Live quote unavailable for `{sym}`.\n\nTry CNBC-style symbols: `ES=F`, `NQ=F`, `.SPX`")
+            col.warning(f"⚠️ Could not fetch live quote for `{sym}`.")
 
     if st.button("🔄 Refresh Live Quotes", key="refresh_rt"):
         fetch_realtime_quote.clear()
