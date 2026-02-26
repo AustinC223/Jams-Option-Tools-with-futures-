@@ -2,6 +2,7 @@ import math
 import time
 import sqlite3
 from datetime import datetime, date, timedelta
+import requests
 
 import streamlit as st
 import yfinance as yf
@@ -254,6 +255,14 @@ def prob_touch_barrier(S0, B, T, r, q, sigma, barrier_type: str):
 # =========================
 # DATA (Yahoo)
 # =========================
+def get_yf_session():
+    session = requests.Session()
+    # 偽裝成一般的 Chrome 瀏覽器
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+    })
+    return session
+
 @st.cache_data(ttl=3600) # 建議快取時間設長一點，例如一小時 (3600秒)
 def fetch_spot(ticker_str):
     try:
