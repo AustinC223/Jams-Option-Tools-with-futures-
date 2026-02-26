@@ -254,15 +254,25 @@ def prob_touch_barrier(S0, B, T, r, q, sigma, barrier_type: str):
 # =========================
 # DATA (Yahoo)
 # =========================
-@st.cache_data(ttl=300, show_spinner=False)
-def fetch_spot(ticker: str):
-    t = yf.Ticker(ticker)
-    hist = t.history(period="2y", interval="1d")
-    if hist is None or hist.empty:
-        raise RuntimeError("No price data returned from Yahoo.")
-    spot = float(hist["Close"].iloc[-1])
-    spot_ts = str(hist.index[-1])
-    return spot, spot_ts, hist.reset_index()
+@st.cache_data(ttl=3600) # 建議快取時間設長一點，例如一小時 (3600秒)
+def fetch_spot(ticker_str):
+    try:
+        session = get_yf_session()
+        t = yf.Ticker(ticker_str, session=session)
+        
+        # 這裡是你原本 line 260 的位置
+        hist = t.history(period="2y", interval="1d")
+        
+        if hist.empty:
+            return None, None, None
+            
+        # 剩下的邏輯保持不變...
+        # spot = ...
+        # spot_ts = ...
+        return spot, spot_ts, hist
+    except Exception as e:
+        st.error(f"獲取數據失敗: {e}")
+        return None, None, None
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_expiries(ticker: str):
