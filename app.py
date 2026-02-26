@@ -255,6 +255,7 @@ def prob_touch_barrier(S0, B, T, r, q, sigma, barrier_type: str):
 # =========================
 # DATA (Yahoo)
 # =========================
+
 def get_yf_session():
     session = requests.Session()
     # 偽裝成一般的 Chrome 瀏覽器
