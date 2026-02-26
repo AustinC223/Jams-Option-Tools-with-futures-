@@ -2,8 +2,6 @@ import math
 import time
 import sqlite3
 from datetime import datetime, date, timedelta
-import requests
-
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -255,54 +253,40 @@ def prob_touch_barrier(S0, B, T, r, q, sigma, barrier_type: str):
 # =========================
 # DATA (Yahoo)
 # =========================
-
-def get_yf_session():
-    session = requests.Session()
-    # 偽裝成一般的 Chrome 瀏覽器
-    session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
-    })
-    return session
-
-@st.cache_data(ttl=3600) # 建議快取時間設長一點，例如一小時 (3600秒)
-def fetch_spot(ticker_str):
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_spot(ticker: str):
     try:
-        session = get_yf_session()
-        t = yf.Ticker(ticker_str, session=session)
-        
-        # 這裡是你原本 line 260 的位置
+        t = yf.Ticker(ticker)
         hist = t.history(period="2y", interval="1d")
-        
-        if hist.empty:
+        if hist is None or hist.empty:
             return None, None, None
-            
-        # 剩下的邏輯保持不變...
-        # spot = ...
-        # spot_ts = ...
-        return spot, spot_ts, hist
-    except Exception as e:
-        st.error(f"獲取數據失敗: {e}")
+        spot = float(hist["Close"].iloc[-1])
+        spot_ts = str(hist.index[-1])
+        return spot, spot_ts, hist.reset_index()
+    except Exception:
         return None, None, None
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_expiries(ticker: str):
-    t = yf.Ticker(ticker)
-    exps = t.options
-    if not exps:
-        raise RuntimeError("No options expiries returned.")
-    return list(exps)
+    try:
+        t = yf.Ticker(ticker)
+        exps = t.options
+        return list(exps) if exps else []
+    except Exception:
+        return []
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_chain(ticker: str, expiry: str):
-    t = yf.Ticker(ticker)
-    oc = t.option_chain(expiry)
-    calls = oc.calls.copy()
-    puts = oc.puts.copy()
-    calls["option_type"] = "call"
-    puts["option_type"] = "put"
-    df = pd.concat([calls, puts], ignore_index=True)
-    df["expiry"] = pd.to_datetime(expiry).date()
-    return df
+    try:
+        t = yf.Ticker(ticker)
+        oc = t.option_chain(expiry)
+        calls, puts = oc.calls.copy(), oc.puts.copy()
+        calls["option_type"], puts["option_type"] = "call", "put"
+        df = pd.concat([calls, puts], ignore_index=True)
+        df["expiry"] = pd.to_datetime(expiry).date()
+        return df
+    except Exception:
+        return pd.DataFrame()
 
 def normalize_all_chains(ticker: str, expiries: list[str], spot: float) -> pd.DataFrame:
     today = date.today()
@@ -506,6 +490,10 @@ if refresh or st.session_state.last_fetch == 0.0:
 # OPTIONS DATA LOAD
 # =========================
 spot, spot_ts, hist = fetch_spot(ticker)
+if spot is None or hist is None:
+    st.error("⚠️ 目前無法從 Yahoo Finance 獲取數據。")
+    st.info("這通常是因為雲端 IP 被暫時限制，請稍候 1 分鐘後重新整理頁面。")
+    st.stop() # <--- 關鍵！這行能防止後面的 hv21 = realized_vol(hist, 21) 觸發 TypeError
 hv21 = realized_vol(hist, 21)
 hv63 = realized_vol(hist, 63)
 
