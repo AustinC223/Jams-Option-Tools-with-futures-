@@ -463,27 +463,35 @@ def plot_3bar(df3: pd.DataFrame, metric: str, spot_val: float, title: str):
     return fig
 
 def get_es_contract_tickers() -> tuple[str, str]:
-    """Auto-generate the front two E-mini S&P futures tickers based on current date."""
-    # ES rolls on 3rd Friday of Mar/Jun/Sep/Dec
-    cycle = [3, 6, 9, 12]
     month_code = {3: "H", 6: "M", 9: "U", 12: "Z"}
-    
+    cycle = [3, 6, 9, 12]
     today = datetime.today()
+    
     candidates = []
     for year in [today.year, today.year + 1]:
         for m in cycle:
-            # Roll date = 3rd Friday of expiry month
             first_day = datetime(year, m, 1)
-            first_friday = first_day + timedelta(days=(4 - first_day.weekday()) % 7)
+            days_to_friday = (4 - first_day.weekday()) % 7
+            first_friday = first_day + timedelta(days=days_to_friday)
             roll_date = first_friday + timedelta(weeks=2)
-            if roll_date > today:
-                code = month_code[m]
-                yy = str(year)[2:] 
-                candidates.append(f"ES{code}{yy}=F")
-        if len(candidates) >= 2:
-            break
+            
+            if roll_date >= today:
+                yy = str(year)[2:]
+                candidates.append(f"ES{month_code[m]}{yy}=F")
+            
+            if len(candidates) >= 2:
+                return candidates[0], candidates[1]
     
-    return candidates[0], candidates[1]
+    # Dynamic fallback: current quarter + next quarter
+    current_month = today.month
+    near_m = min(cycle, key=lambda m: (m - current_month) % 12)
+    far_m  = cycle[(cycle.index(near_m) + 1) % len(cycle)]
+    near_y = today.year if near_m >= current_month else today.year + 1
+    far_y  = near_y if far_m > near_m else near_y + 1
+    return (
+        f"ES{month_code[near_m]}{str(near_y)[2:]}=F",
+        f"ES{month_code[far_m]}{str(far_y)[2:]}=F",
+    )
 
 # =========================
 # UI CONTROLS
@@ -764,7 +772,7 @@ with tabs[6]:
         return df.dropna(subset=['Near_Close', 'Far_Close'])
 
     # --- Live quote display ---
-    st.markdown("#### 🟢 Real-Time Quotes (CNBC / ~15s delay)")
+    st.markdown("#### 🟢 Real-Time Quotes")
     rt_cols = st.columns(3)
     for col, sym, label in zip(rt_cols,
                                 [near_fut, far_fut, spot_idx],
