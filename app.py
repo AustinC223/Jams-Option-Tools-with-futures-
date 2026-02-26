@@ -199,7 +199,7 @@ st.markdown(
     <div style="padding:16px; background:#000000; border:1px solid rgba(255,153,28,0.55);
                 border-radius:12px; text-align:center;">
       <div style="font-size:28px; font-weight:950; color:#FF991C;">{APP_TITLE}</div>
-      <div style="margin-top:6px; font-weight:800; color:#00ff41;">REAL CHAIN DATA (yfinance) + LIVE FUTURES QUOTES (CNBC API)</div>
+      <div style="margin-top:6px; font-weight:800; color:#00ff41;">REAL CHAIN DATA ONLY (Yahoo Finance via yfinance)</div>
     </div>
     """,
     unsafe_allow_html=True
@@ -691,47 +691,9 @@ with tabs[6]:
     st.subheader("Futures Microstructure: Rollover, Term Structure & Basis")
     st.caption("Analyzing real volume crossover and price spreads to detect institutional positioning and extreme sentiment.")
 
-    # --- Real-time quote via CNBC Markets API (no key required) ---
-    @st.cache_data(ttl=30, show_spinner=False)  # 30-second cache for live quotes
-    def fetch_realtime_quote(symbol: str) -> dict | None:
-        """
-        Fetches a real-time quote from the CNBC Markets API.
-        Works for futures symbols like ES=F, NQ=F and indices like .SPX, .NDX.
-        Returns dict with keys: price, change, change_pct, last_update, name
-        """
-        url = "https://quote.cnbc.com/quote-html-webservice/restservice/cff/get/bulk"
-        params = {
-            "symbols": symbol,
-            "requestMethod": "itv",
-            "noform": "1",
-            "partnerId": "2",
-            "fund": "1",
-            "exthrs": "1",
-            "output": "json",
-            "events": "0",
-        }
-        try:
-            r = requests.get(url, params=params, timeout=5,
-                             headers={"User-Agent": "Mozilla/5.0", "Referer": "https://www.cnbc.com/"})
-            r.raise_for_status()
-            data = r.json()
-            items = data.get("QuickQuoteResult", {}).get("QuickQuote", [])
-            if not items:
-                return None
-            q_data = items[0] if isinstance(items, list) else items
-            return {
-                "price":      float(q_data.get("last", 0) or 0),
-                "change":     float(q_data.get("change", 0) or 0),
-                "change_pct": float(q_data.get("change_pct", 0) or 0),
-                "last_update": q_data.get("last_time_hmx", "N/A"),
-                "name":       q_data.get("name", symbol),
-            }
-        except Exception:
-            return None
-
     @st.cache_data(ttl=3600, show_spinner=False)
     def fetch_futures_microstructure(near, far, spot_ticker):
-        # Historical OHLCV (yfinance is fine for EOD history)
+        # 抓取過去 180 天的資料
         tickers = [near, far, spot_ticker]
         end_dt = datetime.today()
         start_dt = end_dt - timedelta(days=180)
@@ -749,37 +711,14 @@ with tabs[6]:
             df['Far_Volume'] = raw_df[far]['Volume']
             df['Spot_Close'] = raw_df[spot_ticker]['Close']
         except KeyError:
-            return pd.DataFrame()
+            return pd.DataFrame() # 防護: 若 yfinance 下載失敗或結構不符
 
+        # 計算三大指標
         df['Calendar_Spread'] = df['Far_Close'] - df['Near_Close']
         df['Basis'] = df['Near_Close'] - df['Spot_Close']
         df['Volume_Ratio'] = df['Far_Volume'] / df['Near_Volume'].replace(0, np.nan)
 
         return df.dropna(subset=['Near_Close', 'Far_Close'])
-
-    # --- Live quote display ---
-    st.markdown("#### 🟢 Real-Time Quotes (CNBC / ~15s delay)")
-    rt_cols = st.columns(3)
-    for col, sym, label in zip(rt_cols,
-                                [near_fut, far_fut, spot_idx],
-                                ["Near Futures", "Far Futures", "Spot Index"]):
-        qt = fetch_realtime_quote(sym)
-        if qt and qt["price"] > 0:
-            delta_str = f"{qt['change']:+.2f} ({qt['change_pct']:+.2f}%)"
-            col.metric(
-                label=f"{label} ({sym})",
-                value=f"{qt['price']:,.2f}",
-                delta=delta_str,
-                help=f"Last update: {qt['last_update']} | Source: CNBC Markets API",
-            )
-        else:
-            col.warning(f"⚠️ Live quote unavailable for `{sym}`.\n\nTry CNBC-style symbols: `ES=F`, `NQ=F`, `.SPX`")
-
-    if st.button("🔄 Refresh Live Quotes", key="refresh_rt"):
-        fetch_realtime_quote.clear()
-        st.rerun()
-
-    st.markdown("---")
 
     f_data = fetch_futures_microstructure(near_fut, far_fut, spot_idx)
 
