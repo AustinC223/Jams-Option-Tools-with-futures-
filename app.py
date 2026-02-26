@@ -462,6 +462,29 @@ def plot_3bar(df3: pd.DataFrame, metric: str, spot_val: float, title: str):
     fig.update_xaxes(title_text="Strike")
     return fig
 
+def get_es_contract_tickers() -> tuple[str, str]:
+    """Auto-generate the front two E-mini S&P futures tickers based on current date."""
+    # ES rolls on 3rd Friday of Mar/Jun/Sep/Dec
+    cycle = [3, 6, 9, 12]
+    month_code = {3: "H", 6: "M", 9: "U", 12: "Z"}
+    
+    today = datetime.today()
+    candidates = []
+    for year in [today.year, today.year + 1]:
+        for m in cycle:
+            # Roll date = 3rd Friday of expiry month
+            first_day = datetime(year, m, 1)
+            first_friday = first_day + timedelta(days=(4 - first_day.weekday()) % 7)
+            roll_date = first_friday + timedelta(weeks=2)
+            if roll_date > today:
+                code = month_code[m]
+                yy = str(year)[-2:]
+                candidates.append(f"ES{code}{yy}=F")
+        if len(candidates) >= 2:
+            break
+    
+    return candidates[0], candidates[1]
+
 # =========================
 # UI CONTROLS
 # =========================
@@ -475,8 +498,9 @@ watchlist = [x.strip().upper() for x in watchlist_text.replace(",", "\n").splitl
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("## Futures Microstructure")
-near_fut = st.sidebar.text_input("Near-Month Futures", value="ES=F")
-far_fut  = st.sidebar.text_input("Far-Month Futures",  value="NQ=F")
+_near_default, _far_default = get_es_contract_tickers()
+near_fut = st.sidebar.text_input("Near-Month Futures", value=_near_default)
+far_fut  = st.sidebar.text_input("Far-Month Futures",  value=_far_default)
 spot_idx = st.sidebar.text_input("Underlying Spot",    value="^GSPC")
 
 if "last_fetch" not in st.session_state:
