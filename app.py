@@ -257,7 +257,7 @@ def prob_touch_barrier(S0, B, T, r, q, sigma, barrier_type: str):
 def fetch_spot(ticker: str):
     try:
         t = yf.Ticker(ticker) 
-        hist = t.history(period="2y", interval="1d")
+        hist = t.history(period="max", interval="1d")
         if hist is None or hist.empty:
             return None, None, None
         spot = float(hist["Close"].iloc[-1])
