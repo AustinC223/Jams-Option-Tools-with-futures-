@@ -695,30 +695,27 @@ with tabs[6]:
     def fetch_futures_microstructure(near, far, spot_ticker):
         # 抓取過去 180 天的資料
         tickers = [near, far, spot_ticker]
-        end_dt = datetime.today()
-        start_dt = end_dt - timedelta(days=180)
-
-        raw_df = yf.download(tickers, start=start_dt, end=end_dt, group_by="ticker")
-        if raw_df.empty:
-            return pd.DataFrame()
-
-        df = pd.DataFrame(index=raw_df.index)
-
         try:
-            df['Near_Close'] = raw_df[near]['Close']
-            df['Near_Volume'] = raw_df[near]['Volume']
-            df['Far_Close'] = raw_df[far]['Close']
-            df['Far_Volume'] = raw_df[far]['Volume']
-            df['Spot_Close'] = raw_df[spot_ticker]['Close']
-        except KeyError:
-            return pd.DataFrame() # 防護: 若 yfinance 下載失敗或結構不符
+            raw_df = yf.download(tickers, period="1mo", interval="1d", group_by="ticker", auto_adjust=True)
+            if raw_df.empty:
+                return pd.DataFrame()
 
-        # 計算三大指標
-        df['Calendar_Spread'] = df['Far_Close'] - df['Near_Close']
-        df['Basis'] = df['Near_Close'] - df['Spot_Close']
-        df['Volume_Ratio'] = df['Far_Volume'] / df['Near_Volume'].replace(0, np.nan)
-
-        return df.dropna(subset=['Near_Close', 'Far_Close'])
+            df = pd.DataFrame(index=raw_df.index)
+            # 使用 ffill() 處理因為延遲產生的 NaN
+            for tkr in tickers:
+                if tkr in raw_df.columns.levels[0]:
+                    df[f'{tkr}_Close'] = raw_df[tkr]['Close'].ffill()
+                    df[f'{tkr}_Vol'] = raw_df[tkr]['Volume'].fillna(0)
+            
+            # 重新對應名稱進行計算
+            df['Near_Close'] = df[f'{near}_Close']
+            df['Far_Close'] = df[f'{far}_Close']
+            df['Spot_Close'] = df[f'{spot_ticker}_Close']
+            df['Basis'] = df['Near_Close'] - df['Spot_Close']
+            df['Calendar_Spread'] = df['Far_Close'] - df['Near_Close']
+            return df.dropna(subset=['Near_Close', 'Far_Close', 'Spot_Close'])
+        except:
+            return pd.DataFrame()
 
     f_data = fetch_futures_microstructure(near_fut, far_fut, spot_idx)
 
