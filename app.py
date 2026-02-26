@@ -475,9 +475,9 @@ watchlist = [x.strip().upper() for x in watchlist_text.replace(",", "\n").splitl
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("## Futures Microstructure")
-near_fut = st.sidebar.text_input("Near-Month Futures", value="MESM5=F").upper().strip()
-far_fut  = st.sidebar.text_input("Far-Month Futures", value="MESU5=F").upper().strip()
-spot_idx = st.sidebar.text_input("Underlying Spot", value="^GSPC").upper().strip()
+near_fut = st.sidebar.text_input("Near-Month Futures", value="ES=F")
+far_fut  = st.sidebar.text_input("Far-Month Futures",  value="NQ=F")
+spot_idx = st.sidebar.text_input("Underlying Spot",    value="^GSPC")
 
 if "last_fetch" not in st.session_state:
     st.session_state.last_fetch = 0.0
@@ -692,39 +692,22 @@ with tabs[6]:
     st.caption("Analyzing real volume crossover and price spreads to detect institutional positioning and extreme sentiment.")
 
     # --- Real-time quote via CNBC Markets API (no key required) ---
-    @st.cache_data(ttl=30, show_spinner=False)  # 30-second cache for live quotes
+    @st.cache_data(ttl=30, show_spinner=False)
     def fetch_realtime_quote(symbol: str) -> dict | None:
-        """
-        Fetches a real-time quote from the CNBC Markets API.
-        Works for futures symbols like ES=F, NQ=F and indices like .SPX, .NDX.
-        Returns dict with keys: price, change, change_pct, last_update, name
-        """
-        url = "https://quote.cnbc.com/quote-html-webservice/restservice/cff/get/bulk"
-        params = {
-            "symbols": symbol,
-            "requestMethod": "itv",
-            "noform": "1",
-            "partnerId": "2",
-            "fund": "1",
-            "exthrs": "1",
-            "output": "json",
-            "events": "0",
-        }
+        url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbol}"
         try:
-            r = requests.get(url, params=params, timeout=5,
-                             headers={"User-Agent": "Mozilla/5.0", "Referer": "https://www.cnbc.com/"})
+            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
             r.raise_for_status()
-            data = r.json()
-            items = data.get("QuickQuoteResult", {}).get("QuickQuote", [])
-            if not items:
+            result = r.json()["quoteResponse"]["result"]
+            if not result:
                 return None
-            q_data = items[0] if isinstance(items, list) else items
+            q = result[0]
             return {
-                "price":      float(q_data.get("last", 0) or 0),
-                "change":     float(q_data.get("change", 0) or 0),
-                "change_pct": float(q_data.get("change_pct", 0) or 0),
-                "last_update": q_data.get("last_time_hmx", "N/A"),
-                "name":       q_data.get("name", symbol),
+                "price":      float(q.get("regularMarketPrice", 0)),
+                "change":     float(q.get("regularMarketChange", 0)),
+                "change_pct": float(q.get("regularMarketChangePercent", 0)),
+                "last_update": q.get("regularMarketTime", "N/A"),
+                "name":       q.get("shortName", symbol),
             }
         except Exception:
             return None
