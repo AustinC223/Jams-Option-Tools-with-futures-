@@ -507,8 +507,8 @@ watchlist = [x.strip().upper() for x in watchlist_text.replace(",", "\n").splitl
 st.sidebar.markdown("---")
 st.sidebar.markdown("## Futures Microstructure")
 _near_default, _far_default = get_es_contract_tickers()
-near_fut = st.sidebar.text_input("Near-Month Futures", value=_near_default)
-far_fut  = st.sidebar.text_input("Far-Month Futures",  value=_far_default)
+near_fut = st.sidebar.text_input("Near-Month Futures", value="ES=F")
+far_fut  = st.sidebar.text_input("Far-Month Futures",  value="ES=F")
 spot_idx = st.sidebar.text_input("Underlying Spot",    value="^GSPC")
 
 if "last_fetch" not in st.session_state:
