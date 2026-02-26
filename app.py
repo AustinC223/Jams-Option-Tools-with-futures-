@@ -2,6 +2,7 @@ import math
 import time
 import sqlite3
 from datetime import datetime, date, timedelta
+
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -255,38 +256,33 @@ def prob_touch_barrier(S0, B, T, r, q, sigma, barrier_type: str):
 # =========================
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_spot(ticker: str):
-    try:
-        t = yf.Ticker(ticker) 
-        hist = t.history(period="max", interval="1d")
-        if hist is None or hist.empty:
-            return None, None, None
-        spot = float(hist["Close"].iloc[-1])
-        spot_ts = str(hist.index[-1])
-        return spot, spot_ts, hist.reset_index()
-    except Exception:
-        return None, None, None
+    t = yf.Ticker(ticker)
+    hist = t.history(period="2y", interval="1d")
+    if hist is None or hist.empty:
+        raise RuntimeError("No price data returned from Yahoo.")
+    spot = float(hist["Close"].iloc[-1])
+    spot_ts = str(hist.index[-1])
+    return spot, spot_ts, hist.reset_index()
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_expiries(ticker: str):
-    try:
-        t = yf.Ticker(ticker)
-        exps = t.options
-        return list(exps) if exps else []
-    except Exception:
-        return []
+    t = yf.Ticker(ticker)
+    exps = t.options
+    if not exps:
+        raise RuntimeError("No options expiries returned.")
+    return list(exps)
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_chain(ticker: str, expiry: str):
-    try:
-        t = yf.Ticker(ticker)
-        oc = t.option_chain(expiry)
-        calls, puts = oc.calls.copy(), oc.puts.copy()
-        calls["option_type"], puts["option_type"] = "call", "put"
-        df = pd.concat([calls, puts], ignore_index=True)
-        df["expiry"] = pd.to_datetime(expiry).date()
-        return df
-    except Exception:
-        return pd.DataFrame()
+    t = yf.Ticker(ticker)
+    oc = t.option_chain(expiry)
+    calls = oc.calls.copy()
+    puts = oc.puts.copy()
+    calls["option_type"] = "call"
+    puts["option_type"] = "put"
+    df = pd.concat([calls, puts], ignore_index=True)
+    df["expiry"] = pd.to_datetime(expiry).date()
+    return df
 
 def normalize_all_chains(ticker: str, expiries: list[str], spot: float) -> pd.DataFrame:
     today = date.today()
@@ -466,8 +462,8 @@ watchlist = [x.strip().upper() for x in watchlist_text.replace(",", "\n").splitl
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("## Futures Microstructure")
-near_fut = st.sidebar.text_input("Near-Month Futures", value="MESM5=F").upper().strip()
-far_fut  = st.sidebar.text_input("Far-Month Futures", value="MESU5=F").upper().strip()
+near_fut = st.sidebar.text_input("Near-Month Futures", value="ESM5=F").upper().strip()
+far_fut  = st.sidebar.text_input("Far-Month Futures", value="ESU5=F").upper().strip()
 spot_idx = st.sidebar.text_input("Underlying Spot", value="^GSPC").upper().strip()
 
 if "last_fetch" not in st.session_state:
@@ -490,10 +486,6 @@ if refresh or st.session_state.last_fetch == 0.0:
 # OPTIONS DATA LOAD
 # =========================
 spot, spot_ts, hist = fetch_spot(ticker)
-if spot is None or hist is None:
-    st.error("❌ 無法從 Yahoo Finance 獲取數據。")
-    st.info("這通常是雲端 IP 被暫時限制，或者是 Ticker 輸入錯誤。請稍候 1 分鐘再刷新。")
-    st.stop()
 hv21 = realized_vol(hist, 21)
 hv63 = realized_vol(hist, 63)
 
