@@ -2,9 +2,22 @@ import math
 import time
 import sqlite3
 from datetime import datetime, date, timedelta
-
+import requests
 import streamlit as st
 import yfinance as yf
+from yfinance.exceptions import YFRateLimitError
+
+@st.cache_data(ttl=3600)  # 1 小時 cache
+def fetch_expiries(ticker: str):
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0"
+    })
+
+    t = yf.Ticker(ticker, session=session)
+    exps = t.options   # 原本第 290 行
+    return exps
+
 import pandas as pd
 import numpy as np
 import plotly.express as px
