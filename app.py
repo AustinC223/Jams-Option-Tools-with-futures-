@@ -269,13 +269,27 @@ def prob_touch_barrier(S0, B, T, r, q, sigma, barrier_type: str):
 # =========================
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_spot(ticker: str):
-    t = yf.Ticker(ticker)
-    hist = t.history(period="2y", interval="1d")
-    if hist is None or hist.empty:
-        raise RuntimeError("No price data returned from Yahoo.")
-    spot = float(hist["Close"].iloc[-1])
-    spot_ts = str(hist.index[-1])
-    return spot, spot_ts, hist.reset_index()
+    try:
+        t = yf.Ticker(ticker)
+        # 抓取最近 5 天的日線，確保一定有資料
+        hist = t.history(period="5d", interval="1d")
+        if hist.empty:
+            # 如果日線抓不到，嘗試抓 1 分鐘線的最後一筆
+            hist = t.history(period="1d", interval="1m")
+            
+        if hist.empty:
+            return None, None, None
+            
+        # 抓取最後一個「非空」的收盤價
+        last_row = hist.iloc[-1]
+        spot = float(last_row["Close"])
+        spot_ts = str(hist.index[-1].strftime('%Y-%m-%d %H:%M'))
+        
+        # 為了後續 HV 計算，我們還是需要長期的 hist
+        full_hist = t.history(period="2y", interval="1d").reset_index()
+        return spot, spot_ts, full_hist
+    except:
+        return None, None, None
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_expiries(ticker: str):
